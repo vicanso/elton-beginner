@@ -1,12 +1,22 @@
 package main
 
 import (
+	_ "github.com/vicanso/beginner/controller"
 	"github.com/vicanso/beginner/log"
+	"github.com/vicanso/beginner/router"
 	"github.com/vicanso/elton"
+	"github.com/vicanso/elton/middleware"
 )
 
 func main() {
 	e := elton.New()
+
+	e.Use(middleware.NewDefaultResponder())
+
+	// 将初始化的分组路由添加到当前实例中
+	for _, g := range router.GetGroups() {
+		e.AddGroup(g)
+	}
 
 	addr := ":7001"
 	logger := log.Default()
