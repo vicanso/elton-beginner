@@ -87,3 +87,43 @@ curl 'http://127.0.0.1:7001/users/v1/me' -v
 * Connection #0 to host 127.0.0.1 left intact
 {"name":"test"}* Closing connection 0
 ```
+
+## 出错响应
+
+elton中默认的出错响应仅是将出错信息返回，并设置状态码为`500`，实际使用中我们需要根据系统的需要，制定标准的出错类型。下面是使用error中间件的出错处理（可参考与实现定制自定义的出错）。
+
+```go
+// ... 部分代码省略
+	// 出错处理
+	e.Use(middleware.NewDefaultError())
+	// 响应数据转换处理
+	e.Use(middleware.NewDefaultResponder())
+// ... 部分代码省略
+```
+
+error中间件会根据客户端请求头是否指定`Accept: application/json`返回json数据，否则返回text数据。此中间使用的error类型为[hes]()，有不同自定义属性，可根据不同的场景返回不同的出错，主要属性有：
+
+- statusCode: 出错响应码，如果不设置则为400
+- code: 出错码，可用于定义不同的出错
+- category: 出错分类，用于将错误分类，如参数校验出错的可定义为`validate`
+- message: 出错信息
+- title: 出错标题
+
+```bash
+curl -H 'Accept:application/json' 'http://127.0.0.1:7001/users/v1' -v
+*   Trying 127.0.0.1...
+* TCP_NODELAY set
+* Connected to 127.0.0.1 (127.0.0.1) port 7001 (#0)
+> GET /users/v1 HTTP/1.1
+> Host: 127.0.0.1:7001
+> User-Agent: curl/7.64.1
+> Accept:application/json
+>
+< HTTP/1.1 500 Internal Server Error
+< Content-Type: application/json; charset=utf-8
+< Date: Tue, 06 Jul 2021 00:20:27 GMT
+< Content-Length: 97
+<
+* Connection #0 to host 127.0.0.1 left intact
+{"statusCode":500,"category":"elton-error","message":"仅允许管理员访问","exception":true}
+```
