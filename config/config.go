@@ -5,6 +5,7 @@ import (
 	"embed"
 	"io"
 	"os"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/vicanso/viperx"
@@ -17,6 +18,7 @@ var (
 	// 当前运行环境
 	env              = os.Getenv("GO_ENV")
 	defaultValidator = validator.New()
+	defaultViperX    = mustLoadConfig()
 )
 
 const (
@@ -26,6 +28,22 @@ const (
 	Test = "test"
 	// Production 生产环境下的环境变量
 	Production = "production"
+)
+
+type (
+	// BasicConfig 应用基本配置信息
+	BasicConfig struct {
+		// 监听地址
+		Listen string `validate:"required,ascii"`
+		// 最大处理请求数
+		RequestLimit uint `validate:"required"`
+		// 应用名称
+		Name string `validate:"required,ascii"`
+		// 应用前缀
+		Prefixes []string `validate:"omitempty"`
+		// 超时（用于设置所有请求)
+		Timeout time.Duration
+	}
 )
 
 // GetENV 获取当前运行环境
@@ -69,4 +87,18 @@ func mustLoadConfig() *viperx.ViperX {
 		panic(err)
 	}
 	return defaultViperX
+}
+
+// GetBasicConfig 获取基本配置信息
+func GetBasicConfig() *BasicConfig {
+	prefix := "basic."
+	basicConfig := &BasicConfig{
+		Name:         defaultViperX.GetString(prefix + "name"),
+		RequestLimit: defaultViperX.GetUint(prefix + "requestLimit"),
+		Listen:       defaultViperX.GetStringFromENV(prefix + "listen"),
+		Prefixes:     defaultViperX.GetStringSlice(prefix + "prefixes"),
+		Timeout:      defaultViperX.GetDuration(prefix + "timeout"),
+	}
+	mustValidate(basicConfig)
+	return basicConfig
 }

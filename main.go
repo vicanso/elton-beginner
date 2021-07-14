@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"regexp"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/vicanso/beginner/config"
 	_ "github.com/vicanso/beginner/controller"
 	"github.com/vicanso/beginner/log"
 	"github.com/vicanso/beginner/router"
@@ -12,6 +14,8 @@ import (
 	"github.com/vicanso/elton/middleware"
 	"github.com/vicanso/hes"
 )
+
+var basicConfig = config.GetBasicConfig()
 
 func main() {
 	e := elton.New()
@@ -37,6 +41,19 @@ func main() {
 	})
 	// panic的恢复处理，放在最前
 	e.Use(middleware.NewRecover())
+
+	// 如果有配置应用超时设置
+	if basicConfig.Timeout != 0 {
+		// 仅将timeout设置给context，后续调用如果无依赖于context
+		// 则不会超时
+		// 后续再考虑是否增加select
+		e.Use(func(c *elton.Context) error {
+			ctx, cancel := context.WithTimeout(c.Context(), basicConfig.Timeout)
+			defer cancel()
+			c.WithContext(ctx)
+			return c.Next()
+		})
+	}
 
 	// 访问日志，其调用需要放在出错与响应之前，这样才能获取真实的响应数据与状态码
 	e.Use(middleware.NewStats(middleware.StatsConfig{
@@ -94,7 +111,7 @@ func main() {
 		e.AddGroup(g)
 	}
 
-	addr := ":7001"
+	addr := basicConfig.Listen
 	logger.Info().
 		Str("addr", addr).
 		Msg("server is running")

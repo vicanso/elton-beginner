@@ -62,9 +62,9 @@ func (*userCtrl) list(c *elton.Context) (err error) {
 elton默认的并没有对`Body`的数据转换为输出数据，此响应的转换应该由开发者自定义中间件来实现，对于json的转换可以使用已实现好的中间件[]()，代码逻辑也简单，仅需要要elton实例中添加使用中间件即可。
 
 ```go
-// ... 部分代码省略
+// -- 略 --
 	e.Use(middleware.NewDefaultResponder())
-// ... 部分代码省略
+// -- 略 --
 ```
 
 增加此中间件之后，响应数据以期望的json返回。
@@ -93,12 +93,12 @@ curl 'http://127.0.0.1:7001/users/v1/me' -v
 elton中默认的出错响应仅是将出错信息返回，并设置状态码为`500`，实际使用中我们需要根据系统的需要，制定标准的出错类型。下面是使用error中间件的出错处理（可参考与实现定制自定义的出错）。
 
 ```go
-// ... 部分代码省略
+// -- 略 --
 	// 出错处理
 	e.Use(middleware.NewDefaultError())
 	// 响应数据转换处理
 	e.Use(middleware.NewDefaultResponder())
-// ... 部分代码省略
+// -- 略 --
 ```
 
 error中间件会根据客户端请求头是否指定`Accept: application/json`返回json数据，否则返回text数据。此中间使用的error类型为[hes]()，有不同自定义属性，可根据不同的场景返回不同的出错，主要属性有：
