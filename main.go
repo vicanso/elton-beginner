@@ -7,6 +7,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/vicanso/beginner/config"
 	_ "github.com/vicanso/beginner/controller"
+	"github.com/vicanso/beginner/helper"
 	"github.com/vicanso/beginner/log"
 	"github.com/vicanso/beginner/router"
 	"github.com/vicanso/elton"
@@ -15,7 +16,17 @@ import (
 	"github.com/vicanso/hes"
 )
 
-var basicConfig = config.GetBasicConfig()
+var basicConfig = config.MustGetBasicConfig()
+
+// 相关依赖服务的校验，主要是数据库等
+func dependServiceCheck() (err error) {
+	err = helper.RedisPing()
+	if err != nil {
+		return
+	}
+
+	return
+}
 
 func main() {
 	e := elton.New()
@@ -111,12 +122,21 @@ func main() {
 		e.AddGroup(g)
 	}
 
+	err := dependServiceCheck()
+	if err != nil {
+		log.Default().Error().
+			Str("category", "depFail").
+			Err(err).
+			Msg("")
+		return
+	}
+
 	addr := basicConfig.Listen
 	logger.Info().
 		Str("addr", addr).
 		Msg("server is running")
 	// 监听端口
-	err := e.ListenAndServe(addr)
+	err = e.ListenAndServe(addr)
 	// 如果失败则直接panic，因为程序无法提供服务
 	if err != nil {
 		logger.Error().

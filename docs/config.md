@@ -109,8 +109,8 @@ func mustLoadConfig() *viperx.ViperX {
 	return defaultViperX
 }
 
-// GetBasicConfig 获取基本配置信息
-func GetBasicConfig() *BasicConfig {
+// MustGetBasicConfig 获取基本配置信息
+func MustGetBasicConfig() *BasicConfig {
 	prefix := "basic."
 	basicConfig := &BasicConfig{
 		Name:         defaultViperX.GetString(prefix + "name"),
@@ -165,7 +165,7 @@ import (
 	"github.com/vicanso/hes"
 )
 
-var basicConfig = config.GetBasicConfig()
+var basicConfig = config.MustGetBasicConfig()
 
 func main() {
 	// -- 略 --

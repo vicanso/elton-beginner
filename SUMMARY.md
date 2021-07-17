@@ -7,3 +7,4 @@
 * [控制器](./docs/controller.md)
 * [中间件](./docs/middleware.md)
 * [系统配置](./docs/config.md)
+* [缓存](./docs/cache.md)
