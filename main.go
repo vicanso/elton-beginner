@@ -24,7 +24,15 @@ func dependServiceCheck() (err error) {
 	if err != nil {
 		return
 	}
-
+	err = helper.EntPing()
+	if err != nil {
+		return
+	}
+	// 程序启动后再执行init schema
+	err = helper.EntInitSchema()
+	if err != nil {
+		return
+	}
 	return
 }
 

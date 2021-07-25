@@ -8,3 +8,4 @@
 * [中间件](./docs/middleware.md)
 * [系统配置](./docs/config.md)
 * [缓存](./docs/cache.md)
+* [数据库](./docs/database.md)

@@ -3,3 +3,9 @@
 # for dev
 dev:
 	air -c .air.toml	
+
+install:
+	go get entgo.io/ent/cmd/entc
+
+generate: 
+	entc generate ./schema --target ./ent

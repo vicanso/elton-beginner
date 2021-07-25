@@ -213,7 +213,7 @@ func (*redisHook) ReportResult(result error) {
 
 ## cache模块
 
-redis模块提供了性能统计、熔断等手段，通过redis client可以使用redis提供的各类丰富命令实现各种缓存，[go-cache](https://github.com/vicanso/go-cache)提供了几类常用的缓存方式，可以参考使用。下面是使用go-cache与lruttl初始化的几种常用缓存。
+redis模块提供了性能统计、熔断等手段，通过redis client可以使用redis提供的各类丰富命令实现各种缓存，而使用缓存时新手经常未设置缓存有效期等常见的错误，[go-cache](https://github.com/vicanso/go-cache)提供了几类常用的缓存方式，均强制使用缓存有效期（若不设置则使用默认值），可以参考使用。下面是使用go-cache与lruttl初始化的几种常用缓存。
 
 ```go
 package cache

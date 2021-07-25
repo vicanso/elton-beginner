@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 
@@ -15,6 +16,13 @@ func (h tracerHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
 		return
 	}
 	// TODO 实现相关重现信息的添加
+}
+
+type entLogger struct{}
+
+func (el *entLogger) Log(args ...interface{}) {
+	Default().Info().
+		Msg(fmt.Sprint(args...))
 }
 
 var defaultLogger = newLogger()
@@ -59,4 +67,9 @@ func newLogger() *zerolog.Logger {
 // Default 获取默认的logger
 func Default() *zerolog.Logger {
 	return defaultLogger
+}
+
+// NewEntLogger create a ent logger
+func NewEntLogger() *entLogger {
+	return &entLogger{}
 }

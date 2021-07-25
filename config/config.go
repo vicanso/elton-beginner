@@ -65,6 +65,17 @@ type (
 		// sentinel模式下使用的master name
 		Master string
 	}
+	// PostgresConfig postgres配置
+	PostgresConfig struct {
+		// 连接串
+		URI string `validate:"required,uri"`
+		// 最大连接数
+		MaxOpenConns int
+		// 最大空闲连接数
+		MaxIdleConns int
+		// 最大空闲时长
+		MaxIdleTime time.Duration
+	}
 )
 
 // GetENV 获取当前运行环境
@@ -172,4 +183,31 @@ func MustGetRedisConfig() *RedisConfig {
 
 	mustValidate(redisConfig)
 	return redisConfig
+}
+
+// MustGetPostgresConfig 获取postgres配置
+func MustGetPostgresConfig() *PostgresConfig {
+	prefix := "postgres."
+	uri := defaultViperX.GetStringFromENV(prefix + "uri")
+	rawQuery := ""
+	uriInfo, _ := url.Parse(uri)
+	maxIdleConns := 0
+	maxOpenConns := 0
+	var maxIdleTime time.Duration
+	if uriInfo != nil {
+		query := uriInfo.Query()
+		rawQuery = "?" + uriInfo.RawQuery
+		maxIdleConns, _ = strconv.Atoi(query.Get("maxIdleConns"))
+		maxOpenConns, _ = strconv.Atoi(query.Get("maxOpenConns"))
+		maxIdleTime, _ = time.ParseDuration(query.Get("maxIdleTime"))
+	}
+
+	postgresConfig := &PostgresConfig{
+		URI:          strings.ReplaceAll(uri, rawQuery, ""),
+		MaxIdleConns: maxIdleConns,
+		MaxOpenConns: maxOpenConns,
+		MaxIdleTime:  maxIdleTime,
+	}
+	mustValidate(postgresConfig)
+	return postgresConfig
 }
