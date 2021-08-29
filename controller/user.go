@@ -4,10 +4,19 @@ import (
 	"errors"
 
 	"github.com/vicanso/beginner/router"
+	"github.com/vicanso/beginner/validate"
 	"github.com/vicanso/elton"
 )
 
 type userCtrl struct{}
+
+// 注册参数
+type userRegisterParams struct {
+	// 账号
+	Account string `json:"account" validate:"required,xUserAccount"`
+	// 密码
+	Password string `json:"password" validate:"required,xUserPassword"`
+}
 
 func init() {
 	ctrl := userCtrl{}
@@ -21,16 +30,25 @@ func init() {
 	g.GET("/v1", ctrl.list)
 }
 
-func (*userCtrl) me(c *elton.Context) (err error) {
+func (*userCtrl) me(c *elton.Context) error {
 	// mock用户信息
 	c.Body = &struct {
 		Name string `json:"name"`
 	}{
 		Name: "test",
 	}
-	return
+	return nil
 }
 
-func (*userCtrl) list(c *elton.Context) (err error) {
+func (*userCtrl) list(c *elton.Context) error {
 	return errors.New("仅允许管理员访问")
+}
+
+func (*userCtrl) register(c *elton.Context) error {
+	params := userRegisterParams{}
+	err := validate.Do(&params, c.RequestBody)
+	if err != nil {
+		return err
+	}
+	return nil
 }
