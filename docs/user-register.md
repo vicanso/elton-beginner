@@ -38,3 +38,34 @@ type userRegisterParams struct {
 
 参数定义仅简单账号与密码，增加基本的类型校验，线上系统建议增加图形验证码来、IP频率调用限制等增强校验，避免机器人调用。
 
+```go
+func (*userCtrl) register(c *elton.Context) error {
+	params := userRegisterParams{}
+	err := validate.Do(&params, c.RequestBody)
+	if err != nil {
+		return err
+	}
+	pwd := fmt.Sprintf("%x", sha256.Sum256([]byte(params.Password)))
+
+	user, err := helper.EntGetClient().User.Create().
+		SetAccount(params.Account).
+		SetPassword(pwd).
+		Save(c.Context())
+
+	if err != nil {
+		return err
+	}
+	c.Created(user)
+	return nil
+}
+```
+
+调用注册接口，成功注册账号：
+
+```bash
+curl -XPOST -d '{"account":"vicanso", "password":"123123"}' \
+  -H 'Content-Type:application/json;charset=utf-8' \
+  'http://127.0.0.1:7001/users/v1/me'
+
+{"id":1,"createdAt":"2021-09-03T15:38:58.405002+08:00","updatedAt":"2021-09-03T15:38:58.405003+08:00","account":"vicanso"}
+```

@@ -1,8 +1,11 @@
 package controller
 
 import (
+	"crypto/sha256"
 	"errors"
+	"fmt"
 
+	"github.com/vicanso/beginner/helper"
 	"github.com/vicanso/beginner/router"
 	"github.com/vicanso/beginner/validate"
 	"github.com/vicanso/elton"
@@ -24,6 +27,8 @@ func init() {
 
 	// 当前登录信息查询
 	g.GET("/v1/me", ctrl.me)
+	// 注册用户
+	g.POST("/v1/me", ctrl.register)
 
 	// 客户列表查询
 	// TODO 添加仅能管理员调用
@@ -50,5 +55,16 @@ func (*userCtrl) register(c *elton.Context) error {
 	if err != nil {
 		return err
 	}
+	pwd := fmt.Sprintf("%x", sha256.Sum256([]byte(params.Password)))
+
+	user, err := helper.EntGetClient().User.Create().
+		SetAccount(params.Account).
+		SetPassword(pwd).
+		Save(c.Context())
+
+	if err != nil {
+		return err
+	}
+	c.Created(user)
 	return nil
 }
