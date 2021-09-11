@@ -9,6 +9,48 @@ import (
 	"entgo.io/ent/schema/mixin"
 )
 
+type Status int8
+
+const (
+	// 状态启用
+	StatusEnabled Status = iota + 1
+	// 状态禁用
+	StatusDisabled
+)
+
+// ToInt8 转换为int8
+func (status Status) Int8() int8 {
+	return int8(status)
+}
+
+// String 转换为string
+func (status Status) String() string {
+	switch status {
+	case StatusEnabled:
+		return "启用"
+	case StatusDisabled:
+		return "禁用"
+	default:
+		return "未知"
+	}
+}
+
+// StatusMixin 状态的schema
+type StatusMixin struct {
+	mixin.Schema
+}
+
+// Fields 公共的status的字段
+func (StatusMixin) Fields() []ent.Field {
+	return []ent.Field{
+		field.Int8("status").
+			Range(StatusEnabled.Int8(), StatusDisabled.Int8()).
+			Default(StatusEnabled.Int8()).
+			GoType(Status(StatusEnabled)).
+			Comment("状态，默认为启用状态"),
+	}
+}
+
 // TimeMixin 公共的时间schema
 type TimeMixin struct {
 	mixin.Schema

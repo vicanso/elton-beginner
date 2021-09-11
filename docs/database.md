@@ -17,9 +17,52 @@ ent是一个简单而又强大的orm框架，根据定义的schema自动编译�
 - 创建时间：该记录的创建时间，在保存时自动生成
 - 更新时间：该记录的更新时间，在数据变化时生成
 
-ent的schema支持Mixin形式，因此将创建时间与更新时间定义为公共的schema，定义如下：
+ent的schema支持Mixin形式，因此将创建时间、更新时间以及状态定义为公共的scheme，如下：
 
 ```go
+
+type Status int8
+
+const (
+	// 状态启用
+	StatusEnabled Status = iota + 1
+	// 状态禁用
+	StatusDisabled
+)
+
+// ToInt8 转换为int8
+func (status Status) Int8() int8 {
+	return int8(status)
+}
+
+// String 转换为string
+func (status Status) String() string {
+	switch status {
+	case StatusEnabled:
+		return "启用"
+	case StatusDisabled:
+		return "禁用"
+	default:
+		return "未知"
+	}
+}
+
+// StatusMixin 状态的schema
+type StatusMixin struct {
+	mixin.Schema
+}
+
+// Fields 公共的status的字段
+func (StatusMixin) Fields() []ent.Field {
+	return []ent.Field{
+		field.Int8("status").
+			Range(StatusEnabled.Int8(), StatusDisabled.Int8()).
+			Default(StatusEnabled.Int8()).
+			GoType(Status(StatusEnabled)).
+			Comment("状态，默认为启用状态"),
+	}
+}
+
 // TimeMixin 公共的时间schema
 type TimeMixin struct {
 	mixin.Schema
@@ -52,7 +95,7 @@ func (TimeMixin) Indexes() []ent.Index {
 }
 ```
 
-用户schema的定义则如下：
+用户schema的定义添加`TimeMixin`与`StatusMixin`，再添加相关的fields的定义，以及按需要添加indexes则可，代码如下：
 
 ```go
 // User holds the schema definition for the User entity.
@@ -64,6 +107,7 @@ type User struct {
 func (User) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		TimeMixin{},
+		StatusMixin{},
 	}
 }
 
@@ -109,9 +153,86 @@ func (User) Indexes() []ent.Index {
 }
 ```
 
+## 模板定义
+
+ent提供自定义模板的形式，可以在编译出相应代码时添加各类自定义的函数。
+
+用户的Schema中添加了Status，希望添加一个StatusDesc用来转义其对应的中文，虽然可以在定义Schema时的fields添加，但是这样会导致数据库也增加了此额外的字段，因此使用模板的形式调整编译后生成的代码。模板如下：
+
+
+```tmpl
+{{ define "model/fields/additional" }}
+	{{/* 添加额外字段 */}}
+	{{- range $i, $f := $.Fields }}
+	{{- if eq $f.Name "status" }}
+		// 状态描述
+		StatusDesc string `json:"statusDesc,omitempty"`
+	{{- end }}
+	{{- end }}
+{{ end }}
+```
+
+模板的处理比较简单，仅是针对fields如果有定义status则添加`StatusDesc`，具体实现的时候可根据应用场景添加更多的限制，如仅针对某schema等等，具体使用可至ent官方站点查看相关文档。
+
+通过增加模板后，编译生成的`User`定义已添加`StatusDesc`属性，如下：
+
+```go
+type User struct {
+	...
+	...
+
+	// 状态描述
+	StatusDesc string `json:"statusDesc,omitempty"`
+}
+```
+
+此时虽然已经添加了相应的字段，但是需要根据`Status`来生成其对应的中文描述，ent暂时未提供Query Hook（Roadmap for v1上的提及），无法在query中添加处理。考虑到`StatusDesc`用于界面上展示时使用，而接口使用json形式返回，因此调整MarshalJSON的实现，在序列化时生成此字段。
+
+golang的`json.Marshal`序列化时，会先判断该对象是否实例了`MarshalJSON`方法，如果实现了则直接调用，因此我们只要添加自定义的`MarshalJSON`则可，代码如下：
+
+```go
+type MarshalUser User
+// 转换为json时先将相应字段填充
+func (u *User) MarshalJSON() ([]byte, error) {
+	tmp := (*MarshalUser)(u)
+	tmp.StatusDesc = tmp.Status.String()
+	return json.Marshal(tmp)
+}
+```
+
+由于ent数据库相关的代码是通过编译生成，因此还是需要通过模板的形式来生成代码，模板如下：
+
+```tmpl
+{{/* gotype: entgo.io/ent/entc/gen.Graph */}}
+
+{{ define "marshal" }}
+
+{{ $pkg := base $.Config.Package }}
+{{ template "header" $ }}
+
+import "encoding/json"
+
+{{ range $n := $.Nodes }}
+
+{{/* 用户 */}}
+{{- if eq $n.Name "User" }}
+type MarshalUser User
+// 转换为json时先将相应字段填充
+func (u *User) MarshalJSON() ([]byte, error) {
+	tmp := (*MarshalUser)(u)
+	tmp.StatusDesc = tmp.Status.String()
+	return json.Marshal(tmp)
+}
+{{ end }}
+
+{{ end }}
+
+{{ end }}
+```
+
 ## 代码编译
 
-定义好schema之后则可以根据schema编译生成对应的程序代码，首先安装`entc`，执行如下命令`go get entgo.io/ent/cmd/entc@v0.8.0`，需要注意安装版本最好与项目依赖的版本号一致。
+定义好schema之后则可以根据schema编译生成对应的程序代码，首先安装`entc`，执行如下命令`go get entgo.io/ent/cmd/entc@v0.9.1`，需要注意安装版本最好与项目依赖的版本号一致。
 
 安装成功后执行`entc generate ./schema --target ./ent`指定编译代码存放目录。
 
@@ -254,4 +375,4 @@ func mustNewEntClient() (*entsql.Driver, *ent.Client) {
 - `EntInitSchema`: 根据schema定义生成表结构执行migrate操作，若项目中存在大量表定义，建议不直接执行而是将相关输入至命令行，手工执行
 - `EntGetStats` 获取数据库连接的相关统计指标
 
-注意：entc编译生成的代码并未添加至代码库中，因此每次执行`make generate`或`entc generate ./schema --target ./ent`生成。
+注意：entc编译生成的代码并未添加至代码库中，因此每次执行`make generate`或`entc generate ./schema --template ./template --target ./ent`生成。
