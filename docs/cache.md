@@ -122,7 +122,7 @@ func (rh *redisHook) logSlowOrError(ctx context.Context, cmd, err string) {
 	t := ctx.Value(startedAtKey).(*time.Time)
 	d := time.Since(*t)
 	if d > rh.slow || err != "" {
-		log.Default().Info().
+		log.Info(ctx).
 			Str("category", "redisSlowOrErr").
 			Str("cmd", cmd).
 			Str("use", d.String()).
@@ -203,7 +203,7 @@ func (rh *redisHook) Allow() error {
 func (*redisHook) ReportResult(result error) {
 	// allow返回error时不触发
 	if result != nil && !RedisIsNilError(result) {
-		log.Default().Error().
+		log.Error(context.Background()).
 			Str("category", "redisProcessFail").
 			Err(result).
 			Msg("")

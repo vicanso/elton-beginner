@@ -38,7 +38,10 @@ func dependServiceCheck() (err error) {
 
 func main() {
 	e := elton.New()
-	logger := log.Default()
+
+	scf := config.MustGetSessionConfig()
+	e.SignedKeys = &elton.RWMutexSignedKeys{}
+	e.SignedKeys.SetKeys(scf.Keys)
 
 	// 只有未被处理的error才会触发此回调
 	// 一般的出错均由error中间件处理，不会触发此回调
@@ -47,7 +50,7 @@ func main() {
 		ip := c.RealIP()
 		uri := c.Request.RequestURI
 		// 可以针对实际场景输出更多的日志信息
-		log.Default().Error().
+		log.Error(c.Context()).
 			Str("category", "exception").
 			Str("ip", ip).
 			Str("route", c.Route).
@@ -77,7 +80,7 @@ func main() {
 	// 访问日志，其调用需要放在出错与响应之前，这样才能获取真实的响应数据与状态码
 	e.Use(middleware.NewStats(middleware.StatsConfig{
 		OnStats: func(si *middleware.StatsInfo, c *elton.Context) {
-			logger.Info().
+			log.Info(c.Context()).
 				// 日志分类
 				Str("category", "accessLog").
 				Str("ip", si.IP).
@@ -117,7 +120,9 @@ func main() {
 		Use(middleware.NewDefaultETag())
 
 	// 出错处理
-	e.Use(middleware.NewDefaultError())
+	e.Use(middleware.NewError(middleware.ErrorConfig{
+		ResponseType: "json",
+	}))
 	// 响应数据转换处理
 	e.Use(middleware.NewDefaultResponder())
 
@@ -132,7 +137,7 @@ func main() {
 
 	err := dependServiceCheck()
 	if err != nil {
-		log.Default().Error().
+		log.Error(context.Background()).
 			Str("category", "depFail").
 			Err(err).
 			Msg("")
@@ -140,14 +145,14 @@ func main() {
 	}
 
 	addr := basicConfig.Listen
-	logger.Info().
+	log.Info(context.Background()).
 		Str("addr", addr).
 		Msg("server is running")
 	// 监听端口
 	err = e.ListenAndServe(addr)
 	// 如果失败则直接panic，因为程序无法提供服务
 	if err != nil {
-		logger.Error().
+		log.Error(context.Background()).
 			Err(err).
 			Msg("server listen fail")
 		panic(err)

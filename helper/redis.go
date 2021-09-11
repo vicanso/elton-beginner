@@ -45,7 +45,7 @@ type (
 
 func mustNewRedisClient() (redis.UniversalClient, *redisHook) {
 	redisConfig := config.MustGetRedisConfig()
-	log.Default().Info().
+	log.Info(context.Background()).
 		Strs("addr", redisConfig.Addrs).
 		Msg("connect to redis")
 	hook := &redisHook{
@@ -60,7 +60,7 @@ func mustNewRedisClient() (redis.UniversalClient, *redisHook) {
 		MasterName:       redisConfig.Master,
 		PoolSize:         redisConfig.PoolSize,
 		OnConnect: func(ctx context.Context, cn *redis.Conn) error {
-			log.Default().Info().Msg("redis new connection is established")
+			log.Info(ctx).Msg("redis new connection is established")
 			// TODO 可增加创建连接的统计
 			return nil
 		},
@@ -96,7 +96,7 @@ func (rh *redisHook) logSlowOrError(ctx context.Context, cmd, err string) {
 	t := ctx.Value(startedAtKey).(*time.Time)
 	d := time.Since(*t)
 	if d > rh.slow || err != "" {
-		log.Default().Info().
+		log.Info(ctx).
 			Str("category", "redisSlowOrErr").
 			Str("cmd", cmd).
 			Str("use", d.String()).
@@ -177,7 +177,7 @@ func (rh *redisHook) Allow() error {
 func (*redisHook) ReportResult(result error) {
 	// allow返回error时不触发
 	if result != nil && !RedisIsNilError(result) {
-		log.Default().Error().
+		log.Error(context.Background()).
 			Str("category", "redisProcessFail").
 			Err(result).
 			Msg("")

@@ -1,27 +1,28 @@
 package log
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 
 	"github.com/rs/zerolog"
 	"github.com/vicanso/beginner/util"
+	mask "github.com/vicanso/go-mask"
 )
 
-type tracerHook struct{}
-
-func (h tracerHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
-	if level == zerolog.NoLevel {
-		return
-	}
-	// TODO 实现相关重现信息的添加
-}
+// 日志中值的最大长度
+var logFieldValueMaxSize = 30
+var logMask = mask.New(
+	mask.RegExpOption(regexp.MustCompile(`password`)),
+	mask.MaxLengthOption(logFieldValueMaxSize),
+)
 
 type entLogger struct{}
 
 func (el *entLogger) Log(args ...interface{}) {
-	Default().Info().
+	Info(context.Background()).
 		Msg(fmt.Sprint(args...))
 }
 
@@ -32,29 +33,23 @@ func newLogger() *zerolog.Logger {
 	// 如果要节约日志空间，可以配置
 	zerolog.TimestampFieldName = "t"
 	zerolog.LevelFieldName = "l"
-	// 时间格式化
 	zerolog.TimeFieldFormat = "2006-01-02T15:04:05.999Z07:00"
 
 	var l zerolog.Logger
-	// 开发环境以console writer的形式输出日志
 	if util.IsDevelopment() {
-		// 可根据需要精简日志输出
-		// 如不添加tracer hook timestamp等
 		l = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).
-			Hook(&tracerHook{}).
 			With().
 			Timestamp().
 			Logger()
 	} else {
 		l = zerolog.New(os.Stdout).
 			Level(zerolog.InfoLevel).
-			Hook(&tracerHook{}).
 			With().
 			Timestamp().
 			Logger()
 	}
 
-	// 如果指定了log level的级别，则指定日志级别
+	// 如果有配置指定日志级别，则以配置指定的输出
 	logLevel := os.Getenv("LOG_LEVEL")
 	if logLevel != "" {
 		lv, _ := strconv.Atoi(logLevel)
@@ -64,9 +59,29 @@ func newLogger() *zerolog.Logger {
 	return &l
 }
 
-// Default 获取默认的logger
-func Default() *zerolog.Logger {
-	return defaultLogger
+func fillTraceInfos(ctx context.Context, e *zerolog.Event) *zerolog.Event {
+	account := util.GetAccount(ctx)
+	// deviceID := util.GetDeviceID(ctx)
+	if account == "" {
+		return e
+	}
+	return e.Str("account", account)
+}
+
+func Info(ctx context.Context) *zerolog.Event {
+	return fillTraceInfos(ctx, defaultLogger.Info())
+}
+
+func Error(ctx context.Context) *zerolog.Event {
+	return fillTraceInfos(ctx, defaultLogger.Error())
+}
+
+func Debug(ctx context.Context) *zerolog.Event {
+	return fillTraceInfos(ctx, defaultLogger.Debug())
+}
+
+func Warn(ctx context.Context) *zerolog.Event {
+	return fillTraceInfos(ctx, defaultLogger.Warn())
 }
 
 // NewEntLogger create a ent logger

@@ -76,6 +76,17 @@ type (
 		// 最大空闲时长
 		MaxIdleTime time.Duration
 	}
+	// SessionConfig session相关配置信息
+	SessionConfig struct {
+		// cookie的保存路径
+		CookiePath string `validate:"required,ascii"`
+		// cookie的key
+		Key string `validate:"required,ascii"`
+		// cookie的有效期
+		TTL time.Duration `validate:"required"`
+		// 用于加密cookie的key
+		Keys []string `validate:"required"`
+	}
 )
 
 // GetENV 获取当前运行环境
@@ -210,4 +221,17 @@ func MustGetPostgresConfig() *PostgresConfig {
 	}
 	mustValidate(postgresConfig)
 	return postgresConfig
+}
+
+// MustGetSessionConfig 获取session的配置
+func MustGetSessionConfig() *SessionConfig {
+	prefix := "session."
+	sessConfig := &SessionConfig{
+		TTL:        defaultViperX.GetDuration(prefix + "ttl"),
+		Key:        defaultViperX.GetString(prefix + "key"),
+		CookiePath: defaultViperX.GetString(prefix + "path"),
+		Keys:       defaultViperX.GetStringSlice(prefix + "keys"),
+	}
+	mustValidate(sessConfig)
+	return sessConfig
 }

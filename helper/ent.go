@@ -38,7 +38,7 @@ func mustNewEntClient() (*entsql.Driver, *ent.Client) {
 			maskURI = strings.ReplaceAll(maskURI, pass, "***")
 		}
 	}
-	log.Default().Info().
+	log.Info(context.Background()).
 		Str("uri", maskURI).
 		Msg("connect postgres")
 	db, err := sql.Open("pgx", postgresConfig.URI)
@@ -128,7 +128,7 @@ func initSchemaHooks(c *ent.Client) {
 			}
 
 			d := time.Since(startedAt)
-			log.Default().Info().
+			log.Info(ctx).
 				Str("category", "entStats").
 				Str("schema", schemaType).
 				Str("op", op).
