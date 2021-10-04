@@ -131,9 +131,7 @@ func main() {
 	e.Use(middleware.NewDefaultBodyParser())
 
 	// 将初始化的分组路由添加到当前实例中
-	for _, g := range router.GetGroups() {
-		e.AddGroup(g)
-	}
+	e.AddGroup(router.GetGroups()...)
 
 	err := dependServiceCheck()
 	if err != nil {

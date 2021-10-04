@@ -101,7 +101,7 @@ elton中默认的出错响应仅是将出错信息返回，并设置状态码为
 // -- 略 --
 ```
 
-error中间件会根据客户端请求头是否指定`Accept: application/json`返回json数据，否则返回text数据。此中间使用的error类型为[hes]()，有不同自定义属性，可根据不同的场景返回不同的出错，主要属性有：
+error中间件会根据客户端请求头是否指定`Accept: application/json`返回json数据，否则返回text数据，建议在实际项目中使用自定义的Error对象。此中间使用的error类型为[hes](https://github.com/vicanso/hes)，有不同自定义属性，可根据不同的场景返回不同的出错，主要属性有：
 
 - statusCode: 出错响应码，如果不设置则为400
 - code: 出错码，可用于定义不同的出错
@@ -127,3 +127,5 @@ curl -H 'Accept:application/json' 'http://127.0.0.1:7001/users/v1' -v
 * Connection #0 to host 127.0.0.1 left intact
 {"statusCode":500,"category":"elton-error","message":"仅允许管理员访问","exception":true}
 ```
+
+需要注意，响应数据中的`"exception":true`用于表示使用了非`hes.Error`的出错。在项目使用中，建议逻辑处理中的出错均使用自定义的Error(如hes.Error)返回，通过在Error中间件针对非自定义的出错可以收集相关未知出错（非主动抛出出错），便于后续程序优化。

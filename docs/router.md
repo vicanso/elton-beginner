@@ -37,8 +37,6 @@ func GetGroups() []*elton.Group {
 ```go
 // ... 其它部分代码
 	// 将初始化的分组路由添加到当前实例中
-	for _, g := range router.GetGroups() {
-		e.AddGroup(g)
-	}
+	e.AddGroup(router.GetGroups()...)
 // ... 其它部分代码
 ```

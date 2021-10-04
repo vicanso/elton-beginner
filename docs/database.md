@@ -14,8 +14,8 @@ ent是一个简单而又强大的orm框架，根据定义的schema自动编译�
 - 角色：用户角色，可选，允许一个用户多个角色
 - 分组：用户分组，可选，允许一个用户多个分组
 - 邮箱：用户邮箱，可选
-- 创建时间：该记录的创建时间，在保存时自动生成
-- 更新时间：该记录的更新时间，在数据变化时生成
+- 创建时间：该记录的创建时间，在数据创建时生成
+- 更新时间：该记录的更新时间，在数据更新时生成
 
 ent的schema支持Mixin形式，因此将创建时间、更新时间以及状态定义为公共的scheme，如下：
 
@@ -232,9 +232,9 @@ func (u *User) MarshalJSON() ([]byte, error) {
 
 ## 代码编译
 
-定义好schema之后则可以根据schema编译生成对应的程序代码，首先安装`entc`，执行如下命令`go get entgo.io/ent/cmd/entc@v0.9.1`，需要注意安装版本最好与项目依赖的版本号一致。
+定义好schema之后则可以根据schema编译生成对应的程序代码，首先安装`entc`，执行如下命令`go get entgo.io/ent/cmd/entc@v0.9.1`，需要注意安装版本与项目依赖的版本号一致。
 
-安装成功后执行`entc generate ./schema --target ./ent`指定编译代码存放目录。
+安装成功后执行`go run entgo.io/ent/cmd/ent generate ./schema --template ./template --target ./ent`指定编译代码存放目录。
 
 
 ## hooks
@@ -375,4 +375,4 @@ func mustNewEntClient() (*entsql.Driver, *ent.Client) {
 - `EntInitSchema`: 根据schema定义生成表结构执行migrate操作，若项目中存在大量表定义，建议不直接执行而是将相关输入至命令行，手工执行
 - `EntGetStats` 获取数据库连接的相关统计指标
 
-注意：entc编译生成的代码并未添加至代码库中，因此每次执行`make generate`或`entc generate ./schema --template ./template --target ./ent`生成。
+注意：entc编译生成的代码并未添加至代码库中，因此每次执行`make generate`或`go run entgo.io/ent/cmd/ent generate ./schema --template ./template --target ./ent`生成。

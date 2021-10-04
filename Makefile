@@ -5,7 +5,8 @@ dev:
 	air -c .air.toml	
 
 install:
-	go get entgo.io/ent/cmd/entc
+	go get -d entgo.io/ent/cmd/entc
 
 generate: 
-	entc generate ./schema --template ./template --target ./ent
+	rm -rf ./ent
+	go run entgo.io/ent/cmd/ent generate ./schema --template ./template --target ./ent

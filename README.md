@@ -4,7 +4,7 @@ description: 简单介绍elton的中间件实现逻辑及其关键点
 
 # Elton简述
 
-Elton的实现主要参考了[koa](https://github.com/koajs/koa)，最主要的核心就是中间件的处理。在了解如何使用elton之前，首先要了解其中间件的处理过程，主要有以下关键点：
+Elton的实现主要参考了[koa](https://github.com/koajs/koa)，最核心就是中间件的处理。在了解如何使用elton之前，首先要了解其中间件的处理过程，主要有以下关键点：
 
 * 处理顺序：请求时从左往右，响应时从右往左（参考示例图）
 * 中间件处理失败直接返回error，如数据解析出错、Session获取失败、权限校验不通过等
@@ -13,7 +13,7 @@ Elton的实现主要参考了[koa](https://github.com/koajs/koa)，最主要的�
 
 ![elton-middelwares](.gitbook/assets/elton-middelwares.jpg)
 
-虚线箭头表示当该中间件不调用Next函数时的逻辑
+虚线箭头表示该中间件不调用Next函数时的逻辑。
 
 ## 中间件串联
 
