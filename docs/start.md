@@ -10,11 +10,18 @@ Elton提供简单的方式监听端口提供http(s)服务，`ListenAndServe`提�
 package main
 
 import (
+	"time"
+
 	"github.com/vicanso/elton"
 )
 
 func main() {
 	e := elton.New()
+
+	// 可根据应用场景调整http server的配置
+	// 一般保持默认不调整即可
+	e.Server.MaxHeaderBytes = 50 * 1024
+	e.Server.IdleTimeout = 30 * time.Second
 
 	// 监听端口
 	err := e.ListenAndServe(":7001")

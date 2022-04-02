@@ -16,6 +16,7 @@ import (
 	"github.com/vicanso/hes"
 )
 
+// 对应的所有函数均实现在此struct中
 type userCtrl struct{}
 
 // 注册参数
@@ -43,6 +44,7 @@ func init() {
 	ctrl := userCtrl{}
 	g := router.NewGroup(
 		"/users",
+		// 添加当前组共用中间件
 		M.NewSession(),
 	)
 

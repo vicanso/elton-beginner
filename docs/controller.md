@@ -4,46 +4,153 @@ description: 控制器是业务功能的入口，通过控制器指定路由对�
 
 # 控制器
 
-下面先简单的实现查询当前登录用户信息的controller，暂时未实现具体的查询逻辑，仅是一个controller的示例。
+下面的例子是一个用户功能的简单实现，包括注册、登录以及session的相关处理，
 
 ```go
 package controller
 
 import (
+	"crypto/sha256"
 	"errors"
+	"fmt"
 
+	"github.com/vicanso/beginner/ent/user"
+	"github.com/vicanso/beginner/helper"
+	M "github.com/vicanso/beginner/middleware"
 	"github.com/vicanso/beginner/router"
+	"github.com/vicanso/beginner/util"
+	"github.com/vicanso/beginner/validate"
 	"github.com/vicanso/elton"
+	session "github.com/vicanso/elton-session"
+	"github.com/vicanso/hes"
 )
 
+// 对应的所有函数均实现在此struct中
 type userCtrl struct{}
+
+// 注册参数
+type userRegisterParams struct {
+	// 账号
+	Account string `json:"account" validate:"required,xUserAccount"`
+	// 密码
+	Password string `json:"password" validate:"required,xUserPassword"`
+}
+
+const (
+	sessionTokenKey   = "token"
+	sessionAccountKey = "account"
+)
+
+// 登录参数
+type userLoginParams struct {
+	// 账号
+	Account string `json:"account" validate:"required,xUserAccount"`
+	// 密码
+	Password string `json:"password" validate:"required,xUserPassword"`
+}
 
 func init() {
 	ctrl := userCtrl{}
-	g := router.NewGroup("/users")
+	g := router.NewGroup(
+		"/users",
+		// 添加当前组共用中间件
+		M.NewSession(),
+	)
 
 	// 当前登录信息查询
 	g.GET("/v1/me", ctrl.me)
+	// 注册用户
+	g.POST("/v1/me", ctrl.register)
 
-	// 客户列表查询
-	// TODO 添加仅能管理员调用
-	g.GET("/v1", ctrl.list)
+	// 获取登录token
+	g.GET("/v1/login", ctrl.getLoginToken)
+	// 登录用户
+	g.POST("/v1/login", ctrl.login)
 }
 
-func (*userCtrl) me(c *elton.Context) (err error) {
-	// mock用户信息
+func (*userCtrl) me(c *elton.Context) error {
+	se := session.MustGet(c)
+	account := se.GetString(sessionAccountKey)
 	c.Body = &struct {
 		Name string `json:"name"`
 	}{
-		Name: "test",
+		Name: account,
 	}
-	return
+	return nil
 }
 
-func (*userCtrl) list(c *elton.Context) (err error) {
+func (*userCtrl) getLoginToken(c *elton.Context) error {
+	se := session.MustGet(c)
+	// 生成随机token
+	token := util.GenXID()
+	// 设置token至session中
+	err := se.Set(c.Context(), sessionTokenKey, token)
+	if err != nil {
+		return err
+	}
+
+	c.Body = &struct {
+		Token string `json:"token"`
+	}{
+		token,
+	}
+	return nil
+}
+
+func (*userCtrl) login(c *elton.Context) error {
+	params := userLoginParams{}
+	err := validate.Do(&params, c.RequestBody)
+	if err != nil {
+		return err
+	}
+	se := session.MustGet(c)
+	user, err := helper.EntGetClient().User.Query().
+		Where(user.AccountEQ(params.Account)).
+		First(c.Context())
+	if err != nil {
+		return err
+	}
+	// 数据库中保存的密码已经是sha256
+	token := se.GetString(sessionTokenKey)
+	pwd := fmt.Sprintf("%x", sha256.Sum256([]byte(user.Password+token)))
+	if params.Password != pwd {
+		// 不直接提示密码错
+		return hes.New("用户名或密码错误")
+	}
+	// 设置账号至session
+	err = se.Set(c.Context(), sessionAccountKey, params.Account)
+	if err != nil {
+		return err
+	}
+
+	// 成功返回用户信息
+	c.Body = user
+	return nil
+}
+
+func (*userCtrl) list(c *elton.Context) error {
 	return errors.New("仅允许管理员访问")
 }
 
+func (*userCtrl) register(c *elton.Context) error {
+	params := userRegisterParams{}
+	err := validate.Do(&params, c.RequestBody)
+	if err != nil {
+		return err
+	}
+
+	user, err := helper.EntGetClient().User.Create().
+		SetAccount(params.Account).
+		// 密码前端使用sha256(password)处理
+		SetPassword(params.Password).
+		Save(c.Context())
+
+	if err != nil {
+		return err
+	}
+	c.Created(user)
+	return nil
+}
 ```
 
 如上面的代码所示，每个controller会实现其对应的一个struct，如`userCtrl`用于添加各路由的处理函数，一般命名时将功能名称作为前缀，避免多个功能的变量命名冲突。
@@ -54,12 +161,21 @@ func (*userCtrl) list(c *elton.Context) (err error) {
 - 初始化路由分组，`g := router.NewGroup("/users")`
 - 对具体路由实现添加对应处理函数，`g.GET("/v1/me", ctrl.me)`
 
+一般而已，当前同一个组中函数会共用相同的中间件，因此会在初始化组的时候，添加共用的中间件，如：
+
+```go
+	g := router.NewGroup(
+		"/users",
+		// 添加当前组共用中间件
+		M.NewSession(),
+	)
+```
 
 ## 响应数据
 
 示例中响应客户信息时，仅将数据赋值至`c.Body`中则可，之后访问`http://127.0.0.1:7001/users/v1/me`接口并没有返回任何数据，非预期的返回对应的json。
 
-elton默认的并没有对`Body`的数据转换为输出数据，此响应的转换应该由开发者自定义中间件来实现，对于json的转换可以使用已实现好的中间件[]()，代码逻辑也简单，仅需要要elton实例中添加使用中间件即可。
+elton默认的并没有对`Body`的数据转换为输出数据，此响应的转换应该由开发者自定义中间件来实现，对于json的转换可以使用已实现好的中间件[body-parser](https://github.com/vicanso/elton/blob/master/docs/middlewares.md#body-parser)，代码逻辑也简单，仅需要要elton实例中添加全局中间件即可。
 
 ```go
 // -- 略 --

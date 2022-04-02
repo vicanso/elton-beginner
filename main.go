@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"regexp"
+	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/vicanso/beginner/config"
@@ -10,8 +11,8 @@ import (
 	"github.com/vicanso/beginner/helper"
 	"github.com/vicanso/beginner/log"
 	"github.com/vicanso/beginner/router"
+	"github.com/vicanso/beginner/util"
 	"github.com/vicanso/elton"
-	compress "github.com/vicanso/elton-compress"
 	"github.com/vicanso/elton/middleware"
 	"github.com/vicanso/hes"
 )
@@ -43,6 +44,12 @@ func main() {
 	e.SignedKeys = &elton.RWMutexSignedKeys{}
 	e.SignedKeys.SetKeys(scf.Keys)
 
+	// 所有中间件触发前调用
+	e.OnBefore(func(c *elton.Context) {
+		// 设置trace id
+		ctx := util.SetTraceID(c.Context(), util.GenXID())
+		c.WithContext(ctx)
+	})
 	// 只有未被处理的error才会触发此回调
 	// 一般的出错均由error中间件处理，不会触发此回调
 	e.OnError(func(c *elton.Context, err error) {
@@ -55,10 +62,14 @@ func main() {
 			Str("ip", ip).
 			Str("route", c.Route).
 			Str("uri", uri).
-			Msg(he.Error())
-
+			Err(he).
+			Msg("")
 		if he.Category == middleware.ErrRecoverCategory {
-			// TODO graceful close
+			// 设置不再处理接收到的请求
+			// 等待10秒后退出程序
+			// 因为会调用sleep，因此启用新的goroutine
+			// 如果有数据库等，可关闭相应的连接
+			go e.GracefulClose(10 * time.Second)
 		}
 	})
 	// panic的恢复处理，放在最前
@@ -92,7 +103,7 @@ func main() {
 				// 当前处理的请求数
 				Uint32("connecting", si.Connecting).
 				// 耗时
-				Str("consuming", si.Consuming.String()).
+				Str("latency", si.Latency.String()).
 				// 响应数据大小（格式化便于阅读）
 				Str("size", humanize.Bytes(uint64(si.Size))).
 				// 响应数据大小（字节）
@@ -105,9 +116,7 @@ func main() {
 	// 数据压缩（需要放在responder中间件之后，它在responder转换响应数据后再压缩）
 	config := middleware.NewCompressConfig(
 		// 优先br
-		&compress.BrCompressor{
-			MinLength: 1024,
-		},
+		new(middleware.BrCompressor),
 		// 如果不指定最小压缩长度，则为1KB
 		new(middleware.GzipCompressor),
 	)

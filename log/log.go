@@ -14,8 +14,11 @@ import (
 
 // 日志中值的最大长度
 var logFieldValueMaxSize = 30
+
 var logMask = mask.New(
+	// 指定哪些日志需要处理为***
 	mask.RegExpOption(regexp.MustCompile(`password`)),
+	// 指定长度截断
 	mask.MaxLengthOption(logFieldValueMaxSize),
 )
 
@@ -60,11 +63,16 @@ func newLogger() *zerolog.Logger {
 }
 
 func fillTraceInfos(ctx context.Context, e *zerolog.Event) *zerolog.Event {
+	traceID := util.GetTraceID(ctx)
+	// 设置trace id，方便标记当前链路的日志
+	if traceID != "" {
+		e.Str("traceID", traceID)
+	}
 	account := util.GetAccount(ctx)
-	// deviceID := util.GetDeviceID(ctx)
 	if account == "" {
 		return e
 	}
+	// 记录客户信息
 	return e.Str("account", account)
 }
 

@@ -17,7 +17,7 @@ logger中间件可以方便输出访问日志，其日志输出仅需配置格�
 	// 访问日志，其调用需要放在出错与响应之前，这样才能获取真实的响应数据与状态码
 	e.Use(middleware.NewStats(middleware.StatsConfig{
 		OnStats: func(si *middleware.StatsInfo, c *elton.Context) {
-			logger.Info().
+			log.Info(c.Context()).
 				// 日志分类
 				Str("category", "accessLog").
 				Str("ip", si.IP).
@@ -29,7 +29,7 @@ logger中间件可以方便输出访问日志，其日志输出仅需配置格�
 				// 当前处理的请求数
 				Uint32("connecting", si.Connecting).
 				// 耗时
-				Str("consuming", si.Consuming.String()).
+				Str("latency", si.Latency.String()).
 				// 响应数据大小（格式化便于阅读）
 				Str("size", humanize.Bytes(uint64(si.Size))).
 				// 响应数据大小（字节）
@@ -43,7 +43,7 @@ logger中间件可以方便输出访问日志，其日志输出仅需配置格�
 
 ## 异常恢复
 
-当程序触发panic时，合理的操作是捕获此panic后，记录相关日志或发送告警，之后程序以合理优雅的方式重启(重启依赖于守护进程，如docker)。recover中间件简单的获取panic的出错信息，根据客户端的accept属性返回json或text，并触发一个类型为`ErrRecoverCategory`的error事件。
+当程序触发panic时，合理的操作是捕获此panic后，记录相关日志或发送告警，之后程序以优雅的方式退出(重新启动依赖于守护进程，如docker)。recover中间件简单的获取panic的出错信息，根据客户端的accept属性返回json或text，并触发一个类型为`ErrRecoverCategory`的error事件，可监听出错事件，并判断其类型，对于此类出错则程序退出。
 
 
 ```go
@@ -63,7 +63,11 @@ logger中间件可以方便输出访问日志，其日志输出仅需配置格�
 			Msg(he.Error())
 
 		if he.Category == middleware.ErrRecoverCategory {
-			// TODO graceful close
+			// 设置不再处理接收到的请求
+			// 等待10秒后退出程序
+			// 因为会调用sleep，因此启用新的goroutine
+			// 如果有数据库等，可关闭相应的连接
+			go e.GracefulClose(10 * time.Second)
 		}
 	})
 	// panic的恢复处理，放在最前
@@ -85,24 +89,36 @@ elton中`RequestBody`保存请求提交的字节数据，默认时并没有对�
 
 ## 响应数据压缩
 
-http服务中数据响应绝大部分均为文本类数据，可通过压缩的方式减少数据传输。基本所有的浏览器均支持`gzip`压缩，而绝大部分浏览器也支持`br`压缩。如果仅使用`gzip`压缩，可以直接使用默认的压缩中间件。
+http服务中数据响应绝大部分均为文本类数据，可通过压缩的方式减少数据传输。基本所有的浏览器均支持`gzip`压缩，而绝大部分浏览器也支持`br`压缩。如果仅使用`gzip`压缩，可以直接使用默认的压缩中间件。选择压缩算法的可以基于以下的思路：
 
-```go
-// ... 省略部分代码
-	// 数据压缩（需要放在responder中间件之后，它在responder转换响应数据后再压缩）
-	// 针对数据类型为：text|javascript|json|wasm|font 且数据长度大于1KB的数据压缩
-	e.Use(middleware.NewDefaultCompress())
-// ... 省略部分代码
-```
+1、如果客户端是浏览器的，基本只能选择`br`与`gzip`，尽可能选择高压缩率（因为CPU一般比网络资源较为便宜，而现在大多数的应用均非计算密集型）
+2、对于内部应用，现代的网络设备能满足大量的数据传输需要，一般不需要考虑数据压缩。不过对于跨IDC的传输，专线费用较为昂贵，因此可以考虑对于这些跨IDC的访问使用snappy或者zstd压缩后再传输，减少带宽的占用并提升传输性能
+3、数据压缩可基于应用场景、数据长度等选择不同的压缩率，实现更动态化的处理。例如在CPU资源较多时，选择高压缩率，CPU不足时选择低压缩率或不压缩
 
-如果需要支持`br`的压缩，则可使用[elton-compress](https://github.com/vicanso/elton-compress)来添加更多的压缩方式，它支持`br`、`snappy`以及`zstd`等压缩，snappy等可用于内部服务之间调用。
 
 ```go
 // ... 省略部分代码
 	// 数据压缩（需要放在responder中间件之后，它在responder转换响应数据后再压缩）
 	config := middleware.NewCompressConfig(
 		// 优先br
-		&compress.BrCompressor{
+		new(middleware.BrCompressor),
+		// 如果不指定最小压缩长度，则为1KB
+		new(middleware.GzipCompressor),
+	)
+	// 配置针对哪此数据类型压缩
+	config.Checker = regexp.MustCompile("text|javascript|json|wasm|font")
+	e.Use(middleware.NewCompress(config)))
+// ... 省略部分代码
+```
+
+如果需要支持其它的压缩方式，则可使用[elton-compress](https://github.com/vicanso/elton-compress)来添加更多的压缩方式，它支持`snappy`以及`zstd`等压缩，snappy等可用于内部服务之间调用。
+
+```go
+// ... 省略部分代码
+	// 数据压缩（需要放在responder中间件之后，它在responder转换响应数据后再压缩）
+	config := middleware.NewCompressConfig(
+		// 优先snappy，压缩速度快，压缩率较低
+		&compress.SnappyCompressor{
 			MinLength: 1024,
 		},
 		// 如果不指定最小压缩长度，则为1KB
@@ -116,7 +132,7 @@ http服务中数据响应绝大部分均为文本类数据，可通过压缩的�
 
 ## 304
 
-如果HTTP服务提供的数据不经常变化，但又不希望客户端缓存时，可以增加etag与fresh的减少数据传输。
+如果HTTP服务提供的数据不经常变化，但又不希望客户端直接使用缓存时，可以增加etag与fresh的减少数据传输。
 
 ```go
 // ... 省略部分代码

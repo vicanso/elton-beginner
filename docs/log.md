@@ -4,7 +4,7 @@ description: 日志是应用系统的灵魂所在，在系统设计初期则应�
 
 # 日志-应用系统的灵魂
 
-为什么日志是应用系统的灵魂呢？一个应用系统稳定的运行，业务逻辑正常时，它的外在表现就那么的光鲜靓丽，而当日志设计不合理，系统出现问题排查时才发现，原来它的灵魂是那么的肮脏，突然间你开始懂什么是『可远观而不可亵玩焉』。
+为什么日志是应用系统的灵魂呢？一个应用系统稳定的运行，业务逻辑正常时，它的外在表现就那么的光鲜靓丽，而当日志设计不合理，系统出现问题排查时才发现，内在的灵魂是那么的肮脏，残酷的事实让你明白『可远观而不可亵玩焉』。
 
 ## 日志关键要素
 
@@ -16,7 +16,7 @@ description: 日志是应用系统的灵魂所在，在系统设计初期则应�
 
 ## 代码实现
 
-对比[zap](https://github.com/uber-go/zap)与[zerolog](https://github.com/rs/zerolog)的实现与使用方式之后，我选择使用zerolog作为日志处理模块。
+对比[zap](https://github.com/uber-go/zap)与[zerolog](https://github.com/rs/zerolog)的实现与使用方式之后，我选择使用zerolog作为日志处理模块，实际应用时可根据应用需要选择不同的日志模块。
 
 ### 初始化日志实例
 
@@ -37,8 +37,11 @@ import (
 
 // 日志中值的最大长度
 var logFieldValueMaxSize = 30
+
 var logMask = mask.New(
+	// 指定哪些日志需要处理为***
 	mask.RegExpOption(regexp.MustCompile(`password`)),
+	// 指定长度截断
 	mask.MaxLengthOption(logFieldValueMaxSize),
 )
 
@@ -83,11 +86,16 @@ func newLogger() *zerolog.Logger {
 }
 
 func fillTraceInfos(ctx context.Context, e *zerolog.Event) *zerolog.Event {
+	traceID := util.GetTraceID(ctx)
+	// 设置trace id，方便标记当前链路的日志
+	if traceID != "" {
+		e.Str("traceID", traceID)
+	}
 	account := util.GetAccount(ctx)
-	// deviceID := util.GetDeviceID(ctx)
 	if account == "" {
 		return e
 	}
+	// 记录客户信息
 	return e.Str("account", account)
 }
 
