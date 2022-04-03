@@ -14,11 +14,13 @@ var redisCacheWithCompress = newCompressRedisCache()
 var redisSession = newRedisSession()
 var redisConfig = config.MustGetRedisConfig()
 
+// 常用的缓存库，支持几类常用的缓存函数
 func newRedisCache() *goCache.RedisCache {
 	c := goCache.NewRedisCache(helper.RedisGetClient())
 	return c
 }
 
+// 支持针对大数据做snappy压缩的缓存
 func newCompressRedisCache() *goCache.RedisCache {
 	// 大于10KB以上的数据压缩
 	// 适用于数据量较大，而且数据内容重复较多的场景
@@ -29,6 +31,7 @@ func newCompressRedisCache() *goCache.RedisCache {
 	)
 }
 
+// redis session，用于elton session中间件
 func newRedisSession() *goCache.RedisSession {
 	ss := goCache.NewRedisSession(helper.RedisGetClient())
 	// 设置前缀
@@ -51,7 +54,18 @@ func GetRedisSession() *goCache.RedisSession {
 	return redisSession
 }
 
-// 创建指定大小与时间的lru缓存
+// 二级缓存，数据同时保存在lru与redis中
+func NewMultilevelCache(lruSize int, ttl time.Duration, prefix string) *lruttl.L2Cache {
+	opts := []goCache.MultilevelCacheOption{
+		goCache.MultilevelCacheRedisOption(redisCache),
+		goCache.MultilevelCacheLRUSizeOption(lruSize),
+		goCache.MultilevelCacheTTLOption(ttl),
+		goCache.MultilevelCachePrefixOption(prefix),
+	}
+	return goCache.NewMultilevelCache(opts...)
+}
+
+// lru内存缓存，可指定缓存数量与有效期
 func NewLRUCache(maxEntries int, defaultTTL time.Duration) *lruttl.Cache {
 	return lruttl.New(maxEntries, defaultTTL)
 }

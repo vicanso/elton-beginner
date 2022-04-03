@@ -96,10 +96,10 @@ func mustNewRedisClient() (redis.UniversalClient, *redisHook) {
 	return c, hook
 }
 
-// 对于慢或出错请求输出日志并写入influxdb
+// 对于慢或出错请求输出日志
 func (rh *redisHook) logSlowOrError(ctx context.Context, cmd, err string) {
-	t := ctx.Value(startedAtKey).(*time.Time)
-	d := time.Since(*t)
+	t := ctx.Value(startedAtKey).(time.Time)
+	d := time.Since(t)
 	if d > rh.slow || err != "" {
 		log.Info(ctx).
 			Str("category", "redisSlowOrErr").
@@ -112,8 +112,7 @@ func (rh *redisHook) logSlowOrError(ctx context.Context, cmd, err string) {
 
 // BeforeProcess redis处理命令前的hook函数
 func (rh *redisHook) BeforeProcess(ctx context.Context, cmd redis.Cmder) (context.Context, error) {
-	t := time.Now()
-	ctx = context.WithValue(ctx, startedAtKey, &t)
+	ctx = context.WithValue(ctx, startedAtKey, time.Now())
 	rh.processing.Inc()
 	rh.total.Inc()
 	return ctx, nil
@@ -134,8 +133,7 @@ func (rh *redisHook) AfterProcess(ctx context.Context, cmd redis.Cmder) error {
 
 // BeforeProcessPipeline redis pipeline命令前的hook函数
 func (rh *redisHook) BeforeProcessPipeline(ctx context.Context, cmds []redis.Cmder) (context.Context, error) {
-	t := time.Now()
-	ctx = context.WithValue(ctx, startedAtKey, &t)
+	ctx = context.WithValue(ctx, startedAtKey, time.Now())
 	rh.pipeProcessing.Inc()
 	rh.total.Inc()
 	return ctx, nil
@@ -180,7 +178,8 @@ func (rh *redisHook) Allow() error {
 
 // ReportResult 记录结果
 func (*redisHook) ReportResult(result error) {
-	// allow返回error时不触发
+	// 需要注意，只有allow通过后才会触发
+	// 对于is nil的场景也忽略
 	if result != nil && !RedisIsNilError(result) {
 		log.Error(context.Background()).
 			Str("category", "redisProcessFail").
