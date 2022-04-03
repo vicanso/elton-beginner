@@ -48,8 +48,13 @@ func mustNewRedisClient() (redis.UniversalClient, *redisHook) {
 	log.Info(context.Background()).
 		Strs("addr", redisConfig.Addrs).
 		Msg("connect to redis")
+	slow := redisConfig.Slow
+	// 如果慢记录配置值过小，则使用100ms
+	if slow < time.Millisecond {
+		slow = 100 * time.Millisecond
+	}
 	hook := &redisHook{
-		slow:          redisConfig.Slow,
+		slow:          slow,
 		maxProcessing: redisConfig.MaxProcessing,
 	}
 	opts := &redis.UniversalOptions{

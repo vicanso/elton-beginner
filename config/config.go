@@ -138,9 +138,11 @@ func MustGetBasicConfig() *BasicConfig {
 	basicConfig := &BasicConfig{
 		Name:         defaultViperX.GetString(prefix + "name"),
 		RequestLimit: defaultViperX.GetUint(prefix + "requestLimit"),
-		Listen:       defaultViperX.GetStringFromENV(prefix + "listen"),
-		Prefixes:     defaultViperX.GetStringSlice(prefix + "prefixes"),
-		Timeout:      defaultViperX.GetDuration(prefix + "timeout"),
+		// 端口优先读取env，若未指定则读取配置文件
+		Listen:   defaultViperX.GetStringFromENV(prefix + "listen"),
+		Prefixes: defaultViperX.GetStringSlice(prefix + "prefixes"),
+		// 超时优先读取env，若未指定则读取配置文件
+		Timeout: defaultViperX.GetDurationFromENV(prefix + "timeout"),
 	}
 	mustValidate(basicConfig)
 	return basicConfig
@@ -149,6 +151,8 @@ func MustGetBasicConfig() *BasicConfig {
 // MustGetRedisConfig 获取redis的配置
 func MustGetRedisConfig() *RedisConfig {
 	prefix := "redis."
+	// redis配置优先读取env
+	// 建议数据库类配置则都使用env的形式配置
 	uri := defaultViperX.GetStringFromENV(prefix + "uri")
 	uriInfo, err := url.Parse(uri)
 	if err != nil {
@@ -180,6 +184,7 @@ func MustGetRedisConfig() *RedisConfig {
 	}
 
 	// 转换失败则为0
+	// 连接池大小
 	poolSize, _ := strconv.Atoi(query.Get("poolSize"))
 
 	redisConfig := &RedisConfig{
@@ -199,6 +204,7 @@ func MustGetRedisConfig() *RedisConfig {
 // MustGetPostgresConfig 获取postgres配置
 func MustGetPostgresConfig() *PostgresConfig {
 	prefix := "postgres."
+	// postgres与redis一样，优先读取env
 	uri := defaultViperX.GetStringFromENV(prefix + "uri")
 	rawQuery := ""
 	uriInfo, _ := url.Parse(uri)
@@ -227,10 +233,10 @@ func MustGetPostgresConfig() *PostgresConfig {
 func MustGetSessionConfig() *SessionConfig {
 	prefix := "session."
 	sessConfig := &SessionConfig{
-		TTL:        defaultViperX.GetDuration(prefix + "ttl"),
-		Key:        defaultViperX.GetString(prefix + "key"),
-		CookiePath: defaultViperX.GetString(prefix + "path"),
-		Keys:       defaultViperX.GetStringSlice(prefix + "keys"),
+		TTL:        defaultViperX.GetDurationFromENV(prefix + "ttl"),
+		Key:        defaultViperX.GetStringFromENV(prefix + "key"),
+		CookiePath: defaultViperX.GetStringFromENV(prefix + "path"),
+		Keys:       defaultViperX.GetStringSliceFromENV(prefix + "keys"),
 	}
 	mustValidate(sessConfig)
 	return sessConfig

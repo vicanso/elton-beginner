@@ -15,7 +15,7 @@ description: 系统配置
 
 由于在不同的环境运行时，使用的配置有可能不太一致，文件配置需要支持不同的配置可以加载不同的配置文件。在实际使用中，不同的环境的配置仅存在部分差异，因此又需要支持共用默认配置的形式。
 
-配置文件选择使用yaml的格式，运行环境分为：`dev`, `test`, `production`，默认配置为`default`。使用[viperx](https://github.com/vicanso/viperx)来加载配置，此模块仅简单的增强了viper。
+配置文件选择使用yaml的格式，运行环境分为：`dev`, `test`, `production`，默认配置为`default`，按当前运行环境加载对应配置。使用[viperx](https://github.com/vicanso/viperx)来加载配置，此模块仅简单的增强了viper，可以默认指定`default`+`当前环境配置`，并提供了多组`xxxFromENV`的函数，优先从env中获取配置，若未设置则从配置文件中获取，方便无需要编译则可动态修改配置，更灵活方便，建议优先使用此方法设置参数，可在需要调整时快速调整而无需重新构建项目。
 
 ```go
 package config
@@ -24,7 +24,10 @@ import (
 	"bytes"
 	"embed"
 	"io"
+	"net/url"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -63,6 +66,46 @@ type (
 		Prefixes []string `validate:"omitempty"`
 		// 超时（用于设置所有请求)
 		Timeout time.Duration
+	}
+
+	// RedisConfig redis配置
+	RedisConfig struct {
+		// 连接地址
+		Addrs []string `validate:"required,dive,hostname_port"`
+		// 用户名
+		Username string
+		// 密码
+		Password string
+		// 慢请求时长
+		Slow time.Duration `validate:"required"`
+		// 最大的正在处理请求量
+		MaxProcessing uint32 `validate:"required"`
+		// 连接池大小
+		PoolSize int
+		// sentinel模式下使用的master name
+		Master string
+	}
+	// PostgresConfig postgres配置
+	PostgresConfig struct {
+		// 连接串
+		URI string `validate:"required,uri"`
+		// 最大连接数
+		MaxOpenConns int
+		// 最大空闲连接数
+		MaxIdleConns int
+		// 最大空闲时长
+		MaxIdleTime time.Duration
+	}
+	// SessionConfig session相关配置信息
+	SessionConfig struct {
+		// cookie的保存路径
+		CookiePath string `validate:"required,ascii"`
+		// cookie的key
+		Key string `validate:"required,ascii"`
+		// cookie的有效期
+		TTL time.Duration `validate:"required"`
+		// 用于加密cookie的key
+		Keys []string `validate:"required"`
 	}
 )
 
@@ -115,16 +158,112 @@ func MustGetBasicConfig() *BasicConfig {
 	basicConfig := &BasicConfig{
 		Name:         defaultViperX.GetString(prefix + "name"),
 		RequestLimit: defaultViperX.GetUint(prefix + "requestLimit"),
-		Listen:       defaultViperX.GetStringFromENV(prefix + "listen"),
-		Prefixes:     defaultViperX.GetStringSlice(prefix + "prefixes"),
-		Timeout:      defaultViperX.GetDuration(prefix + "timeout"),
+		// 端口优先读取env，若未指定则读取配置文件
+		Listen:   defaultViperX.GetStringFromENV(prefix + "listen"),
+		Prefixes: defaultViperX.GetStringSlice(prefix + "prefixes"),
+		// 超时优先读取env，若未指定则读取配置文件
+		Timeout: defaultViperX.GetDurationFromENV(prefix + "timeout"),
 	}
 	mustValidate(basicConfig)
 	return basicConfig
 }
+
+// MustGetRedisConfig 获取redis的配置
+func MustGetRedisConfig() *RedisConfig {
+	prefix := "redis."
+	// redis配置优先读取env
+	// 建议数据库类配置则都使用env的形式配置
+	uri := defaultViperX.GetStringFromENV(prefix + "uri")
+	uriInfo, err := url.Parse(uri)
+	if err != nil {
+		panic(err)
+	}
+	// 获取密码
+	password, _ := uriInfo.User.Password()
+	username := uriInfo.User.Username()
+
+	query := uriInfo.Query()
+	// 获取slow设置的时间间隔
+	slowValue := query.Get("slow")
+	slow := 100 * time.Millisecond
+	if slowValue != "" {
+		slow, err = time.ParseDuration(slowValue)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// 获取最大处理数的配置
+	maxProcessing := 1000
+	maxValue := query.Get("maxProcessing")
+	if maxValue != "" {
+		maxProcessing, err = strconv.Atoi(maxValue)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// 转换失败则为0
+	// 连接池大小
+	poolSize, _ := strconv.Atoi(query.Get("poolSize"))
+
+	redisConfig := &RedisConfig{
+		Addrs:         strings.Split(uriInfo.Host, ","),
+		Username:      username,
+		Password:      password,
+		Slow:          slow,
+		MaxProcessing: uint32(maxProcessing),
+		PoolSize:      poolSize,
+		Master:        query.Get("master"),
+	}
+
+	mustValidate(redisConfig)
+	return redisConfig
+}
+
+// MustGetPostgresConfig 获取postgres配置
+func MustGetPostgresConfig() *PostgresConfig {
+	prefix := "postgres."
+	// postgres与redis一样，优先读取env
+	uri := defaultViperX.GetStringFromENV(prefix + "uri")
+	rawQuery := ""
+	uriInfo, _ := url.Parse(uri)
+	maxIdleConns := 0
+	maxOpenConns := 0
+	var maxIdleTime time.Duration
+	if uriInfo != nil {
+		query := uriInfo.Query()
+		rawQuery = "?" + uriInfo.RawQuery
+		maxIdleConns, _ = strconv.Atoi(query.Get("maxIdleConns"))
+		maxOpenConns, _ = strconv.Atoi(query.Get("maxOpenConns"))
+		maxIdleTime, _ = time.ParseDuration(query.Get("maxIdleTime"))
+	}
+
+	postgresConfig := &PostgresConfig{
+		URI:          strings.ReplaceAll(uri, rawQuery, ""),
+		MaxIdleConns: maxIdleConns,
+		MaxOpenConns: maxOpenConns,
+		MaxIdleTime:  maxIdleTime,
+	}
+	mustValidate(postgresConfig)
+	return postgresConfig
+}
+
+// MustGetSessionConfig 获取session的配置
+func MustGetSessionConfig() *SessionConfig {
+	prefix := "session."
+	sessConfig := &SessionConfig{
+		TTL:        defaultViperX.GetDurationFromENV(prefix + "ttl"),
+		Key:        defaultViperX.GetStringFromENV(prefix + "key"),
+		CookiePath: defaultViperX.GetStringFromENV(prefix + "path"),
+		Keys:       defaultViperX.GetStringSliceFromENV(prefix + "keys"),
+	}
+	mustValidate(sessConfig)
+	return sessConfig
+}
 ```
 
-通过go1.16新增支持的embed，将当前目录中的yml文件打包，默认先加载default.yml文件，之后再加载GO_ENV对应的yml文件，通过此方式实现共用配置与当前环境配置的合并。应用配置在各模块均有可能使用，因此直接初始化，所有引入它的模块均可直接使用。`mustLoadConfig`在加载配置失败时，会触发panic，各配置获取的时候会调用`mustValidate`，也会触发panic，因此获取配置应该直接一开始就初始化而非在函数中再获取。
+通过go1.16新增支持的embed，将当前目录中的yml文件打包，默认先加载default.yml文件，之后再加载GO_ENV对应的yml文件，通过此方式实现共用配置与当前环境配置的合并。应用配置在各模块均有可能使用，因此直接初始化，所有引入它的模块均可直接使用。`mustLoadConfig`在加载配置失败时，会触发panic，各配置获取的时候会调用`mustValidate`，也会触发panic，因此获取配置应该直接一开始就初始化而非在函数中再获取，避免配置缺失无法在程序启动时感知。
 
 需要注意，viper的处理只是当前配置获取不到时再去读取默认配置而并非真正的将两组配置合并，因此要获取时尽可能一个属性一个属性的获取。
 
