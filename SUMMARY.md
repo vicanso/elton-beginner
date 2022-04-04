@@ -12,3 +12,4 @@
 * [参数校验](./docs/validate.md)
 * [用户注册](./docs/user-register.md)
 * [用户登录](./docs/user-login.md)
+* [常用事件](./docs/event.md)

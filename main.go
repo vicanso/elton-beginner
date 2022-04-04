@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"regexp"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/vicanso/elton"
 	"github.com/vicanso/elton/middleware"
 	"github.com/vicanso/hes"
+	"go.uber.org/atomic"
 )
 
 var basicConfig = config.MustGetBasicConfig()
@@ -44,11 +46,18 @@ func main() {
 	e.SignedKeys = &elton.RWMutexSignedKeys{}
 	e.SignedKeys.SetKeys(scf.Keys)
 
+	processingCount := atomic.NewInt32(0)
 	// 所有中间件触发前调用
 	e.OnBefore(func(c *elton.Context) {
+		// 正在处理请求数+1
+		processingCount.Inc()
 		// 设置trace id
 		ctx := util.SetTraceID(c.Context(), util.GenXID())
 		c.WithContext(ctx)
+	})
+	e.OnDone(func(ctx *elton.Context) {
+		// 正在处理请求数-1
+		processingCount.Dec()
 	})
 	// 只有未被处理的error才会触发此回调
 	// 一般的出错均由error中间件处理，不会触发此回调
@@ -72,6 +81,18 @@ func main() {
 			go e.GracefulClose(10 * time.Second)
 		}
 	})
+
+	// 自定义404与405的处理，一般404与405均是代码或被攻击时导致的
+	// 因此可针对此增加相应的统计，便于及时确认问题
+	e.NotFoundHandler = func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(404)
+		w.Write([]byte("Not Found"))
+	}
+	e.MethodNotAllowedHandler = func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(405)
+		w.Write([]byte("Method Not Allowed"))
+	}
+
 	// panic的恢复处理，放在最前
 	e.Use(middleware.NewRecover())
 
