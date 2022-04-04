@@ -53,6 +53,7 @@ func (*userCtrl) register(c *elton.Context) error {
 		Save(c.Context())
 
 	if err != nil {
+		// 可转换出错再转换为更友好的出错提示
 		return err
 	}
 	c.Created(user)

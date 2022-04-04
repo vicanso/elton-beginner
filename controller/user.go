@@ -73,6 +73,7 @@ func (*userCtrl) me(c *elton.Context) error {
 func (*userCtrl) getLoginToken(c *elton.Context) error {
 	se := session.MustGet(c)
 	// 生成随机token
+	// 用于登录时用密码生成hash值
 	token := util.GenXID()
 	// 设置token至session中
 	err := se.Set(c.Context(), sessionTokenKey, token)
@@ -137,6 +138,7 @@ func (*userCtrl) register(c *elton.Context) error {
 		Save(c.Context())
 
 	if err != nil {
+		// 可转换出错再转换为更友好的出错提示
 		return err
 	}
 	c.Created(user)
