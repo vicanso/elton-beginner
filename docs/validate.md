@@ -8,31 +8,13 @@ description: 参数校验是系统最容易被忽略的一点，如何在参数�
 
 ## 校验规则
 
-一般而言对于接口的传参均需要使用校验，尽可能使用严格的规则以及自定义的形式来校验，严格的参数校验能尽可能避免一些潜在错误或被攻击的风险，使用自定义的校验规则则可通过配置形式忽略或重新定义规则。
+对于接口的传参均需要校验，尽可能使用严格的规则以及自定义的形式来校验，严格的参数校验能尽可能避免一些潜在错误或被攻击的风险，使用自定义的校验规则则可通过配置形式忽略或重新定义规则。
+
+下面主要介绍`doValidate`的处理，它包含了`Unmarshal`、`SetDefaults`以及`Validate`。validate的定义是通过struct tag定义的，需要先将数据赋值至struct中，WEB程序基本以json的形式传输数据，因此使用的是`json.Unmarshal`，并设置默认值，之后进行参数校验。代码如下：
 
 ```go
-package validate
-
-import (
-	"encoding/json"
-	"net/http"
-	"os"
-
-	"github.com/go-playground/validator/v10"
-	"github.com/mcuadros/go-defaults"
-	"github.com/vicanso/hes"
-)
-
-var (
-	defaultValidator = validator.New()
-	// validate默认的出错类别
-	errCategory = "validate"
-	// json parse失败时的出错类别
-	errJSONParseCategory = "json-parse"
-)
-
 // doValidate 校验struct
-func doValidate(s interface{}, data interface{}) (err error) {
+func doValidate(s interface{}, data interface{}) error {
 	// statusCode := http.StatusBadRequest
 	if data != nil {
 		switch data := data.(type) {
@@ -40,15 +22,13 @@ func doValidate(s interface{}, data interface{}) (err error) {
 			if len(data) == 0 {
 				he := hes.New("data is empty")
 				he.Category = errJSONParseCategory
-				err = he
-				return
+				return he
 			}
-			err = json.Unmarshal(data, s)
+			err := json.Unmarshal(data, s)
 			if err != nil {
 				he := hes.Wrap(err)
 				he.Category = errJSONParseCategory
-				err = he
-				return
+				return he
 			}
 		default:
 			buf, err := json.Marshal(data)
@@ -63,82 +43,15 @@ func doValidate(s interface{}, data interface{}) (err error) {
 	}
 	// 设置默认值
 	defaults.SetDefaults(s)
-	err = defaultValidator.Struct(s)
-	return
-}
-
-func wrapError(err error) error {
-
-	he := hes.Wrap(err)
-	if he.Category == "" {
-		he.Category = errCategory
-	}
-	he.StatusCode = http.StatusBadRequest
-	return he
-}
-
-// Do 执行校验
-func Do(s interface{}, data interface{}) (err error) {
-	err = doValidate(s, data)
-	if err != nil {
-		return wrapError(err)
-	}
-	return
-}
-
-// 对struct校验
-func Struct(s interface{}) (err error) {
-	defaults.SetDefaults(s)
-	err = defaultValidator.Struct(s)
-	if err != nil {
-		return wrapError(err)
-	}
-	return
-}
-
-// 任何参数均返回true，不校验。用于临时将某个校验禁用
-func notValidate(fl validator.FieldLevel) bool {
-	return true
-}
-
-func getCustomDefine(tag string) string {
-	return os.Getenv("VALIDATE_" + tag)
-}
-
-// Add 添加一个校验函数
-func Add(tag string, fn validator.Func, args ...bool) {
-	custom := getCustomDefine(tag)
-	if custom == "*" {
-		_ = defaultValidator.RegisterValidation(tag, notValidate)
-		return
-	}
-	if custom != "" {
-		defaultValidator.RegisterAlias(tag, custom)
-		return
-	}
-	err := defaultValidator.RegisterValidation(tag, fn, args...)
-	if err != nil {
-		panic(err)
-	}
-}
-
-// AddAlias add alias
-func AddAlias(alias, tags string) {
-	custom := getCustomDefine(alias)
-	if custom == "*" {
-		_ = defaultValidator.RegisterValidation(alias, notValidate)
-		return
-	}
-	if custom != "" {
-		tags = custom
-	}
-	defaultValidator.RegisterAlias(alias, tags)
+	return defaultValidator.Struct(s)
 }
 ```
 
-代码中主要实现了将`[]byte`或者`query`执行`Unmarshal`之后，设置相关的默认值，并执行参数校验。如果对于某个自定义的校验tag，如`xAccount`的校验规则覆盖，可以在环境变量中设置`VALIDATE_xAccount=*`后，重启应用则可调整为`xAccount`的规则为允许任何参数，也可定义为自定义的规则，方便在原有定义规则有问题时覆盖。
+对参数增加校验之后，能提升程序的安全性，但也有可能因为对于参数规则的误解等原因导致设置了错误的校验规则，导致正常的用户也受影响，因此要添加规则时需要多认真了解所有参数的数据定义。
 
-默认值设置使用[go-defaults](https://github.com/mcuadros/go-defaults)
+针对参数添加校验规则之后，后续需要关注的就是参数校验的出错有哪些，出错比例等等，因此需要在出错转换的时候，关注`json-parse`与`validate`这两类错误，增加监控以及定期整理确认完善校验规则即可。
+
+如果真的出现规则错误，导致大批量用户不可用，可以通过ENV的形式动态调整规则，如`xAccount`的校验规则覆盖，可以在环境变量中设置`VALIDATE_xAccount=*`后，重启应用则可调整为`xAccount`的规则为允许任何参数，也可定义为自定义的规则，方便在原有定义规则有问题时覆盖。
 
 ## 用户参数校验
 
