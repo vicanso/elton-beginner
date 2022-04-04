@@ -15,30 +15,23 @@ description: 参数校验是系统最容易被忽略的一点，如何在参数�
 ```go
 // doValidate 校验struct
 func doValidate(s interface{}, data interface{}) error {
-	// statusCode := http.StatusBadRequest
 	if data != nil {
-		switch data := data.(type) {
-		case []byte:
-			if len(data) == 0 {
-				he := hes.New("data is empty")
-				he.Category = errJSONParseCategory
-				return he
-			}
-			err := json.Unmarshal(data, s)
-			if err != nil {
-				he := hes.Wrap(err)
-				he.Category = errJSONParseCategory
-				return he
-			}
-		default:
-			buf, err := json.Marshal(data)
+		buf, ok := data.([]byte)
+		if !ok {
+			tmp, err := json.Marshal(data)
 			if err != nil {
 				return err
 			}
-			err = json.Unmarshal(buf, s)
-			if err != nil {
-				return err
-			}
+			buf = tmp
+		}
+		if len(buf) == 0 {
+			return hes.New("data is empty", errJSONParseCategory)
+		}
+		err := json.Unmarshal(buf, s)
+		if err != nil {
+			he := hes.Wrap(err)
+			he.Category = errJSONParseCategory
+			return he
 		}
 	}
 	// 设置默认值
