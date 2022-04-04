@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/spf13/cast"
 	"github.com/vicanso/viperx"
 )
 
@@ -65,17 +66,18 @@ type (
 		// sentinel模式下使用的master name
 		Master string
 	}
-	// PostgresConfig postgres配置
-	PostgresConfig struct {
+	// DatabaseConfig 数据库配置
+	DatabaseConfig struct {
 		// 连接串
-		URI string `validate:"required,uri"`
+		URI string `validate:"required"`
 		// 最大连接数
-		MaxOpenConns int
+		MaxOpenConns int `default:"100"`
 		// 最大空闲连接数
-		MaxIdleConns int
+		MaxIdleConns int `default:"10"`
 		// 最大空闲时长
-		MaxIdleTime time.Duration
+		MaxIdleTime time.Duration `default:"5m"`
 	}
+
 	// SessionConfig session相关配置信息
 	SessionConfig struct {
 		// cookie的保存路径
@@ -201,32 +203,38 @@ func MustGetRedisConfig() *RedisConfig {
 	return redisConfig
 }
 
-// MustGetPostgresConfig 获取postgres配置
-func MustGetPostgresConfig() *PostgresConfig {
-	prefix := "postgres."
-	// postgres与redis一样，优先读取env
+// MustGetPostgresConfig 获取数据库配置
+func MustGetDatabaseConfig() *DatabaseConfig {
+	prefix := "database."
+	// 优先读取env
 	uri := defaultViperX.GetStringFromENV(prefix + "uri")
-	rawQuery := ""
-	uriInfo, _ := url.Parse(uri)
 	maxIdleConns := 0
 	maxOpenConns := 0
 	var maxIdleTime time.Duration
-	if uriInfo != nil {
-		query := uriInfo.Query()
-		rawQuery = "?" + uriInfo.RawQuery
-		maxIdleConns, _ = strconv.Atoi(query.Get("maxIdleConns"))
-		maxOpenConns, _ = strconv.Atoi(query.Get("maxOpenConns"))
-		maxIdleTime, _ = time.ParseDuration(query.Get("maxIdleTime"))
+	arr := strings.Split(uri, "?")
+	if len(arr) == 2 {
+		query, _ := url.ParseQuery(arr[1])
+		maxIdleConns = cast.ToInt(query.Get("maxIdleConns"))
+		maxOpenConns = cast.ToInt(query.Get("maxOpenConns"))
+		maxIdleTime = cast.ToDuration(query.Get("maxIdleTime"))
+		query.Del("maxIdleConns")
+		query.Del("maxOpenConns")
+		query.Del("maxIdleTime")
+		uri = arr[0]
+		s := query.Encode()
+		if s != "" {
+			uri += ("?" + s)
+		}
 	}
 
-	postgresConfig := &PostgresConfig{
-		URI:          strings.ReplaceAll(uri, rawQuery, ""),
+	databaseConfig := &DatabaseConfig{
+		URI:          uri,
 		MaxIdleConns: maxIdleConns,
 		MaxOpenConns: maxOpenConns,
 		MaxIdleTime:  maxIdleTime,
 	}
-	mustValidate(postgresConfig)
-	return postgresConfig
+	mustValidate(databaseConfig)
+	return databaseConfig
 }
 
 // MustGetSessionConfig 获取session的配置

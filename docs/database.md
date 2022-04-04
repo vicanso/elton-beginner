@@ -232,10 +232,11 @@ func (u *User) MarshalJSON() ([]byte, error) {
 
 ## 代码编译
 
-定义好schema之后则可以根据schema编译生成对应的程序代码，首先安装`entc`，执行如下命令`go get entgo.io/ent/cmd/entc@v0.9.1`，需要注意安装版本与项目依赖的版本号一致。
+定义好schema之后则可以根据schema编译生成对应的程序代码，首先安装`entc`，执行如下命令`go get -d entgo.io/ent/cmd/entc`，需要注意安装版本与项目依赖的版本号一致。
 
 安装成功后执行`go run entgo.io/ent/cmd/ent generate ./schema --template ./template --target ./ent`指定编译代码存放目录。
 
+`Makefile`中已配置相应的脚本，安装可以使用`make install`，编译使用`make generate`即可。
 
 ## hooks
 
@@ -327,40 +328,30 @@ func initSchemaHooks(c *ent.Client) {
 根据配置的数据库连接初始化数据库客户端。
 
 ```go
-var defaultEntDriver, defaultEntClient = mustNewEntClient()
-
 // mustNewEntClient 初始化客户端与driver
 func mustNewEntClient() (*entsql.Driver, *ent.Client) {
-	postgresConfig := config.MustGetPostgresConfig()
 
-	maskURI := postgresConfig.URI
-	urlInfo, _ := url.Parse(maskURI)
-	if urlInfo != nil {
-		pass, ok := urlInfo.User.Password()
-		if ok {
-			// 连接串输出时将密码***处理
-			maskURI = strings.ReplaceAll(maskURI, pass, "***")
-		}
-	}
+	maskURI := getMaskURI(databaseConfig.URI)
 	log.Info(context.Background()).
 		Str("uri", maskURI).
-		Msg("connect postgres")
-	db, err := sql.Open("pgx", postgresConfig.URI)
+		Msg("connect database")
+	// 根据连接串初始化mysql或postgres
+	db, driverType, err := newClientDB(databaseConfig.URI)
 	if err != nil {
 		panic(err)
 	}
-	if postgresConfig.MaxIdleConns != 0 {
-		db.SetMaxIdleConns(postgresConfig.MaxIdleConns)
+	if databaseConfig.MaxIdleConns != 0 {
+		db.SetMaxIdleConns(databaseConfig.MaxIdleConns)
 	}
-	if postgresConfig.MaxOpenConns != 0 {
-		db.SetMaxOpenConns(postgresConfig.MaxOpenConns)
+	if databaseConfig.MaxOpenConns != 0 {
+		db.SetMaxOpenConns(databaseConfig.MaxOpenConns)
 	}
-	if postgresConfig.MaxIdleTime != 0 {
-		db.SetConnMaxIdleTime(postgresConfig.MaxIdleTime)
+	if databaseConfig.MaxIdleTime != 0 {
+		db.SetConnMaxIdleTime(databaseConfig.MaxIdleTime)
 	}
 
 	// Create an ent.Driver from `db`.
-	driver := entsql.OpenDB(dialect.Postgres, db)
+	driver := entsql.OpenDB(driverType, db)
 	entLogger := log.NewEntLogger()
 	c := ent.NewClient(ent.Driver(driver), ent.Log(entLogger.Log))
 

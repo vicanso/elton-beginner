@@ -11,6 +11,7 @@ require (
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/rs/xid v1.4.0
 	github.com/rs/zerolog v1.26.1
+	github.com/spf13/cast v1.4.1
 	github.com/vicanso/elton v1.9.1
 	github.com/vicanso/elton-session v1.2.3
 	github.com/vicanso/go-cache v1.5.0
@@ -53,7 +54,6 @@ require (
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/spf13/afero v1.8.2 // indirect
-	github.com/spf13/cast v1.4.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.10.1 // indirect
