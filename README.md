@@ -8,10 +8,10 @@ Elton的实现主要参考了[koa](https://github.com/koajs/koa)，最核心就�
 
 * 处理顺序：请求时从左往右，响应时从右往左（参考示例图）
 * 中间件处理失败直接返回error，如数据解析出错、Session获取失败、权限校验不通过等
-* 若当前中间件认为已处理完成当前请求，则无需调用Next函数，如果未处理完成需要转给下一中间件，则调用Next
+* 若当前中间件认为已处理完成当前请求，则无需调用Next函数，如果未处理完成需要转给下一中间件，则调用Next(需要注意此处与gin的处理不一样，gin的是默认会继续执行后续中间件，如果不需要执行，则调用Abort)
 * 中间件的实现中，调用Next函数之前的代码属于请求逻辑处理（示例图的左往右的箭头部分），而Next函数之后的代码则属于响应逻辑处理（示例图右往右的箭头部分）
 
-![elton-middelwares](.gitbook/assets/elton-middelwares.jpg)
+![elton-middlewares](.gitbook/assets/elton-middlewares.jpg)
 
 虚线箭头表示该中间件不调用Next函数时的逻辑。
 
