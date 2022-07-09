@@ -32,10 +32,12 @@ func GetGroups() []*elton.Group {
 }
 ```
 
-只此只提供了分组路由的创建，具体在各controller中使用。下面在实例elton的代码中添加分组路由。
+此示例只提供了分组路由的创建，具体在各controller中使用。下面在实例elton的代码中添加分组路由。
 
 ```go
 // ... 其它部分代码
+	// 默认限制数据长度为50KB，如果想自定义配置查看中间件的说明
+	e.Use(middleware.NewDefaultBodyParser())
 	// 将初始化的分组路由添加到当前实例中
 	e.AddGroup(router.GetGroups()...)
 // ... 其它部分代码
