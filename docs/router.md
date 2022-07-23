@@ -20,7 +20,7 @@ var (
 
 // 创建新的路由分组
 func NewGroup(path string, handlerList ...elton.Handler) *elton.Group {
-    // path为分组路由的前缀
+	// path为分组路由的前缀
 	g := elton.NewGroup(path, handlerList...)
 	groupList = append(groupList, g)
 	return g

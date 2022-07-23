@@ -3,6 +3,7 @@ package log
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -18,8 +19,16 @@ var logFieldValueMaxSize = 30
 var logMask = mask.New(
 	// 指定哪些日志需要处理为***
 	mask.RegExpOption(regexp.MustCompile(`password`)),
-	// 指定长度截断
+	// 指定长度截断(如果不希望截断的，则可添加自定义处理)
 	mask.MaxLengthOption(logFieldValueMaxSize),
+	// 手机号码中间4位不展示
+	mask.CustomMaskOption(regexp.MustCompile(`mobile`), func(key, value string) string {
+		size := len(value)
+		if size < 8 {
+			return value
+		}
+		return value[0:size-8] + "****" + value[size-4:]
+	}),
 )
 
 type entLogger struct{}
@@ -90,6 +99,25 @@ func Debug(ctx context.Context) *zerolog.Event {
 
 func Warn(ctx context.Context) *zerolog.Event {
 	return fillTraceInfos(ctx, defaultLogger.Warn())
+}
+
+// URLValues create a url.Values log event
+func URLValues(query url.Values) *zerolog.Event {
+	if len(query) == 0 {
+		return zerolog.Dict()
+	}
+	return zerolog.Dict().Fields(logMask.URLValues(query))
+}
+
+// Struct create a struct log event
+func Struct(data interface{}) *zerolog.Event {
+	if data == nil {
+		return zerolog.Dict()
+	}
+
+	m, _ := logMask.Struct(data)
+
+	return zerolog.Dict().Fields(m)
 }
 
 // NewEntLogger create a ent logger

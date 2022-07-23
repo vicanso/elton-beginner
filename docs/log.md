@@ -13,6 +13,8 @@ description: 日志是应用系统的灵魂所在，在系统设计初期则应�
 - 日志级别控制：可指定输出的日志级别，方便本地开发时可以输出debug类日志
 - 账户、请求链路等关键信息：日志中需指定客户信息、链路ID等关键信息
 - 支持针对隐私信息***处理
+- 对于过长的信息支持截断处理
+- 可以自定义字段输出的处理方式，如手机号隐藏中间数字等
 
 
 ## 代码实现
@@ -27,6 +29,7 @@ package log
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -42,8 +45,16 @@ var logFieldValueMaxSize = 30
 var logMask = mask.New(
 	// 指定哪些日志需要处理为***
 	mask.RegExpOption(regexp.MustCompile(`password`)),
-	// 指定长度截断
+	// 指定长度截断(如果不希望截断的，则可添加自定义处理)
 	mask.MaxLengthOption(logFieldValueMaxSize),
+	// 手机号码中间4位不展示
+	mask.CustomMaskOption(regexp.MustCompile(`mobile`), func(key, value string) string {
+		size := len(value)
+		if size < 8 {
+			return value
+		}
+		return value[0:size-8] + "****" + value[size-4:]
+	}),
 )
 
 type entLogger struct{}
@@ -116,13 +127,32 @@ func Warn(ctx context.Context) *zerolog.Event {
 	return fillTraceInfos(ctx, defaultLogger.Warn())
 }
 
+// URLValues create a url.Values log event
+func URLValues(query url.Values) *zerolog.Event {
+	if len(query) == 0 {
+		return zerolog.Dict()
+	}
+	return zerolog.Dict().Fields(logMask.URLValues(query))
+}
+
+// Struct create a struct log event
+func Struct(data interface{}) *zerolog.Event {
+	if data == nil {
+		return zerolog.Dict()
+	}
+
+	m, _ := logMask.Struct(data)
+
+	return zerolog.Dict().Fields(m)
+}
+
 // NewEntLogger create a ent logger
 func NewEntLogger() *entLogger {
 	return &entLogger{}
 }
 ```
 
-初始化日志实例的处理逻辑比较简单，根据不同的运行环境使用不同的配置以及日志输出级别等。每个日志函数均需要指定context，用于添加trace信息（如账号等）。
+初始化日志实例的处理逻辑比较简单，根据不同的运行环境使用不同的配置以及日志输出级别等。每个日志函数均需要指定context，用于添加trace信息（如账号等），处理逻辑在`fillTraceInfos`函数中。
 
 ### HTTP服务监听前输出监听日志
 
